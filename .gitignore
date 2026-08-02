@@ -1,0 +1,7 @@
+# PlatformIO build artifacts
+Marlin/.pio/
+.pio/
+
+# Our own archived build outputs (binaries, not source)
+build/*
+!build/.gitkeep
