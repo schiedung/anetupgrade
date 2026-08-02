@@ -10,7 +10,9 @@ Target hardware:
 - Controller: RAMPS 1.4
 - Main MCU: Arduino Mega 2560
 - Firmware target: Marlin 2.1.x
-- Development host: Linux (Ubuntu)
+- Development host: Linux (Ubuntu 26 LTS) for repo/source/config work; Windows
+  (dual-boot on the same machine) for anything that talks to the boards over serial —
+  see "Known Host Limitation" below.
 - Connection: USB serial
 
 This project initially targets firmware migration only.
@@ -271,6 +273,24 @@ Check:
 - CH340 driver
 - Arduino serial device
 - Marlin baud rate
+
+## Known Host Limitation: Ubuntu 26 LTS + CH340
+
+This machine's in-kernel `ch341` driver cannot reliably talk to the RAMPS boards:
+
+- `250000` baud (Marlin's usual default) cannot be opened at all — it requires the
+  `TCGETS2`/`TCSETS2` ioctl for arbitrary baud rates, which this driver returns
+  `ENOTTY` for. This is a driver limitation, not fixable from userspace/Python.
+- Even at baud rates the port will accept (9600–230400), reads returned persistent
+  garbage with no board previously power (only USB, no 12V) — worth retrying with
+  full power before concluding a given baud doesn't work, but don't assume it will.
+
+Net effect: **do not attempt firmware backup, flashing, or bench serial verification
+from this Ubuntu install.** Do that work from the Windows side of this machine's dual
+boot instead (its CH340 driver handles this fine). Source/config prep and compiling
+(`pio run` without `-t upload`) are unaffected and should stay on Linux — only steps
+that open the serial port need Windows. OctoPrint's web UI is also unaffected, since
+the actual serial link is between the Raspberry Pi and the board, not this PC.
 
 ---
 
