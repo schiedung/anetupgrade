@@ -11,8 +11,8 @@ the full project brief, hardware assumptions, and behavior rules this project fo
 | Printer | ANet A8, heavily modified frame |
 | Controller | RAMPS 1.4 |
 | MCU | Arduino Mega2560 (`BOARD_RAMPS_14_EFB`) |
-| Stepper drivers | FYSETC TMC2100, standalone STEP/DIR mode (no UART/SPI) — current set via onboard trimpot, microstepping via MS jumpers |
-| Z axis | Two Z motors wired **in parallel to a single Z driver** — not `Z_DUAL_STEPPER_DRIVERS`, Marlin sees one Z axis |
+| Stepper drivers | TMC2209 V1.2 (5x), standalone STEP/DIR mode (no UART/SPI) — current set via onboard trimpot, microstepping via MS jumpers. Replaces the original FYSETC TMC2100s 1:1 on X/Y/Z/E0, plus a 5th module in the E1 socket (see Z axis row) |
+| Z axis | **Two independent Z motors**, each on its own TMC2209 driver: the original Z socket, and the E1 socket repurposed as Z2 (`Z2_DRIVER_TYPE` + `Z2_STEP_PIN`/`Z2_DIR_PIN`/`Z2_ENABLE_PIN` remapped to `E1_*_PIN` in `Configuration.h`, since `pins_RAMPS.h` has no native Z2 pins for `BOARD_RAMPS_14_EFB`). Previously both motors were wired in parallel to a single Z driver. Both motors still home lock-step against the single existing Z-min endstop — no `Z_MULTI_ENDSTOPS`, no per-motor leveling. E1 is therefore no longer available as a second extruder driver socket |
 | Display | RepRapDiscount Full Graphic Smart Controller (`REPRAP_DISCOUNT_FULL_GRAPHIC_SMART_CONTROLLER`) |
 | SD card | Used, in addition to OctoPrint (`SDSUPPORT` enabled) |
 | Extruder | Single extruder, heated bed, heated nozzle |
@@ -63,7 +63,7 @@ pip3 install --user platformio   # one-time
 
 Builds the `mega2560` PlatformIO environment and copies the resulting
 `firmware-<timestamp>.hex` into `build/`. Current build: RAM 56.3% (4611/8192 B),
-Flash 45.4% (115210/253952 B), zero compiler warnings.
+Flash 45.4% (115228/253952 B), zero compiler warnings.
 
 Compiling does **not** require serial/USB access to a board, so it works fine from
 either OS (see "Known Limitations" below for why flashing does not).
@@ -76,9 +76,12 @@ either OS (see "Known Limitations" below for why flashing does not).
    Windows and run the equivalent `pio run -e mega2560 -t upload --upload-port COMx`
    if not using Git Bash/WSL).
 3. Bench-verify in this order before trusting the board: LCD comms → endstop
-   direction → motor directions → extruder direction → temperature readings → heating
-   elements → full print movement. **Never heat before temperature readings are
-   verified.**
+   direction → motor directions (including Z2 — jog Z unloaded and confirm both Z
+   motors turn the same physical direction; if not, enable `INVERT_Z2_VS_Z_DIR` in
+   `Configuration_adv.h` and reflash rather than rewiring motor phases) → extruder
+   direction → temperature readings → heating elements → full print movement,
+   including a full Z travel to confirm both Z motors stay in sync. **Never heat
+   before temperature readings are verified.**
 4. Only after bench verification passes: power off the printer, swap this board in to
    replace the production board, reconnect to the Raspberry Pi, and update OctoPrint's
    serial port/baud settings to match.
@@ -109,6 +112,16 @@ either OS (see "Known Limitations" below for why flashing does not).
   serial link is between the Raspberry Pi and the board, not this PC.
 - Endstop count/type on the modified frame is assumed stock (not yet physically
   reconfirmed).
+- **Microstep resolution should be re-verified after the TMC2209 swap.**
+  TMC2209 modules select microsteps via 2 CFG/MS pins, vs. the 3-pin table
+  A4988/TMC2100 modules use — the same physical MS jumper positions are not
+  guaranteed to still give the 1/16 step Marlin's config assumes. This
+  compounds the steps/mm limitation above; check both before trusting X/Y/Z
+  motion distances.
+- New second Z motor (Z2, on the former E1 socket) has not yet been
+  bench-verified for direction — see Flash Procedure step 3. If it turns
+  backward relative to Z, enable `INVERT_Z2_VS_Z_DIR` in
+  `Configuration_adv.h` rather than rewiring motor phases.
 - Auto bed leveling, probes, sensorless homing, and other advanced motion features
   are intentionally left disabled, per `CLAUDE.md` — this is a firmware migration
   only, no hardware changes.
